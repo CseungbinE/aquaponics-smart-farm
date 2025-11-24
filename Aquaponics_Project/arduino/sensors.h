@@ -1,0 +1,397 @@
+/**
+ * Aquaponics Smart Farm - Sensor Classes
+ * Implements interfaces for pH, EC, Temperature, DO, Water Level, and Turbidity sensors
+ */
+
+#ifndef SENSORS_H
+#define SENSORS_H
+
+#include <Arduino.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <EEPROM.h>
+
+// ============================================================
+// BASE SENSOR CLASS
+// ============================================================
+
+class Sensor {
+protected:
+  int pin;
+  int sensor_id;
+  bool enabled;
+  uint8_t quality_flags;
+  float raw_value;
+  float calibration_offset;
+  float calibration_scale;
+
+public:
+  Sensor(int _pin) : pin(_pin), sensor_id(0), enabled(true), quality_flags(0),
+                     raw_value(0.0), calibration_offset(0.0), calibration_scale(1.0) {}
+
+  virtual ~Sensor() {}
+
+  virtual float read() = 0;
+  virtual void calibrate() = 0;
+  virtual void load_calibration() = 0;
+  virtual void save_calibration() = 0;
+
+  uint8_t get_flags() const { return quality_flags; }
+  void set_flags(uint8_t flags) { quality_flags = flags; }
+  bool is_healthy() const { return quality_flags == SENSOR_OK; }
+  float get_raw() const { return raw_value; }
+};
+
+// ============================================================
+// PH SENSOR CLASS
+// ============================================================
+
+class PHSensor : public Sensor {
+private:
+  float calib_low_raw;      // Raw ADC at pH 4.0
+  float calib_mid_raw;      // Raw ADC at pH 7.0
+  float calib_high_raw;     // Raw ADC at pH 10.0
+
+  float slope_low;          // Slope between pH 4.0 and 7.0
+  float slope_high;         // Slope between pH 7.0 and 10.0
+
+public:
+  PHSensor(int _pin) : Sensor(_pin),
+                       calib_low_raw(200.0),
+                       calib_mid_raw(512.0),
+                       calib_high_raw(822.0),
+                       slope_low(1.0),
+                       slope_high(1.0) {
+    sensor_id = 1;
+    load_calibration();
+  }
+
+  float read() override {
+    raw_value = 0.0;
+
+    // Read analog value multiple times and average
+    for (int i = 0; i < 5; i++) {
+      raw_value += analogRead(pin);
+      delay(10);
+    }
+    raw_value /= 5.0;
+
+    // Validate range
+    if (raw_value < 0 || raw_value > 1023) {
+      quality_flags |= SENSOR_OUT_OF_RANGE;
+      return -1.0;
+    }
+
+    // Convert to pH using 3-point calibration
+    float ph_value = 0.0;
+
+    if (raw_value < calib_mid_raw) {
+      // Between pH 4.0 and 7.0
+      slope_low = (7.0 - 4.0) / (calib_mid_raw - calib_low_raw);
+      ph_value = 4.0 + slope_low * (raw_value - calib_low_raw);
+    } else {
+      // Between pH 7.0 and 10.0
+      slope_high = (10.0 - 7.0) / (calib_high_raw - calib_mid_raw);
+      ph_value = 7.0 + slope_high * (raw_value - calib_mid_raw);
+    }
+
+    quality_flags = SENSOR_OK;
+    return constrain(ph_value, 0.0, 14.0);
+  }
+
+  void calibrate() override {
+    // This should be called for each calibration point
+    // Implementation done in main sketch
+  }
+
+  void load_calibration() override {
+    // Load calibration values from EEPROM
+    EEPROM.get(EEPROM_PH_CALIB_LOW_ADDR, calib_low_raw);
+    EEPROM.get(EEPROM_PH_CALIB_MID_ADDR, calib_mid_raw);
+    EEPROM.get(EEPROM_PH_CALIB_HIGH_ADDR, calib_high_raw);
+  }
+
+  void save_calibration() override {
+    // Save calibration values to EEPROM
+    EEPROM.put(EEPROM_PH_CALIB_LOW_ADDR, calib_low_raw);
+    EEPROM.put(EEPROM_PH_CALIB_MID_ADDR, calib_mid_raw);
+    EEPROM.put(EEPROM_PH_CALIB_HIGH_ADDR, calib_high_raw);
+  }
+
+  // Setters for calibration data
+  void set_calib_low(float raw) { calib_low_raw = raw; }
+  void set_calib_mid(float raw) { calib_mid_raw = raw; }
+  void set_calib_high(float raw) { calib_high_raw = raw; }
+};
+
+// ============================================================
+// EC/TDS SENSOR CLASS
+// ============================================================
+
+class ECSensor : public Sensor {
+private:
+  float calib_low_raw;      // Raw ADC at EC 1000
+  float calib_high_raw;     // Raw ADC at EC 10000
+  float last_temperature;   // For temperature compensation
+
+public:
+  ECSensor(int _pin) : Sensor(_pin),
+                       calib_low_raw(200.0),
+                       calib_high_raw(800.0),
+                       last_temperature(25.0) {
+    sensor_id = 2;
+    load_calibration();
+  }
+
+  float read() override {
+    raw_value = 0.0;
+
+    // Read analog value
+    for (int i = 0; i < 5; i++) {
+      raw_value += analogRead(pin);
+      delay(10);
+    }
+    raw_value /= 5.0;
+
+    // Validate range
+    if (raw_value < 0 || raw_value > 1023) {
+      quality_flags |= SENSOR_OUT_OF_RANGE;
+      return -1.0;
+    }
+
+    // Linear interpolation: raw_value to EC
+    float slope = (10000.0 - 1000.0) / (calib_high_raw - calib_low_raw);
+    float ec_value = 1000.0 + slope * (raw_value - calib_low_raw);
+
+    // Temperature compensation (2% per °C)
+    // Typical: normalize to 25°C
+    float temp_factor = 1.0 + EC_TEMP_COEFF * (last_temperature - 25.0) / 100.0;
+    if (temp_factor > 0) {
+      ec_value /= temp_factor;
+    }
+
+    quality_flags = SENSOR_OK;
+    return constrain(ec_value, 0.0, 2000.0);
+  }
+
+  void calibrate() override {}
+
+  void load_calibration() override {
+    EEPROM.get(EEPROM_EC_CALIB_LOW_ADDR, calib_low_raw);
+    EEPROM.get(EEPROM_EC_CALIB_HIGH_ADDR, calib_high_raw);
+  }
+
+  void save_calibration() override {
+    EEPROM.put(EEPROM_EC_CALIB_LOW_ADDR, calib_low_raw);
+    EEPROM.put(EEPROM_EC_CALIB_HIGH_ADDR, calib_high_raw);
+  }
+
+  void set_temperature(float temp) { last_temperature = temp; }
+  void set_calib_low(float raw) { calib_low_raw = raw; }
+  void set_calib_high(float raw) { calib_high_raw = raw; }
+};
+
+// ============================================================
+// TEMPERATURE SENSOR CLASS (DS18B20)
+// ============================================================
+
+class TemperatureSensor : public Sensor {
+private:
+  OneWire* one_wire;
+  DallasTemperature* sensors;
+
+public:
+  TemperatureSensor(int _pin) : Sensor(_pin) {
+    sensor_id = 3;
+    one_wire = new OneWire(_pin);
+    sensors = new DallasTemperature(one_wire);
+    sensors->begin();
+  }
+
+  ~TemperatureSensor() {
+    delete sensors;
+    delete one_wire;
+  }
+
+  float read() override {
+    sensors->requestTemperatures();
+    delay(800);  // Wait for conversion
+
+    raw_value = sensors->getTempCByIndex(0);
+
+    // Check for error
+    if (raw_value == DEVICE_DISCONNECTED_C) {
+      quality_flags |= SENSOR_ERROR;
+      return -999.0;
+    }
+
+    if (raw_value < -10.0 || raw_value > 85.0) {
+      quality_flags |= SENSOR_OUT_OF_RANGE;
+      return -999.0;
+    }
+
+    quality_flags = SENSOR_OK;
+    return raw_value;
+  }
+
+  void calibrate() override {}
+
+  void load_calibration() override {
+    // DS18B20 is factory calibrated
+  }
+
+  void save_calibration() override {
+    // DS18B20 is factory calibrated
+  }
+};
+
+// ============================================================
+// DISSOLVED OXYGEN SENSOR CLASS
+// ============================================================
+
+class DOSensor : public Sensor {
+private:
+  float calib_zero_raw;
+  float calib_span_raw;
+  float last_temperature;
+
+public:
+  DOSensor(int _pin) : Sensor(_pin),
+                       calib_zero_raw(0.0),
+                       calib_span_raw(1023.0),
+                       last_temperature(25.0) {
+    sensor_id = 4;
+    load_calibration();
+  }
+
+  float read() override {
+    raw_value = 0.0;
+
+    for (int i = 0; i < 5; i++) {
+      raw_value += analogRead(pin);
+      delay(10);
+    }
+    raw_value /= 5.0;
+
+    if (raw_value < 0 || raw_value > 1023) {
+      quality_flags |= SENSOR_OUT_OF_RANGE;
+      return -1.0;
+    }
+
+    // Linear conversion: zero to span
+    float percentage = ((raw_value - calib_zero_raw) / (calib_span_raw - calib_zero_raw)) * 100.0;
+
+    // Convert percentage to mg/L (assuming 100% = 10 mg/L at sea level, 25°C)
+    // Temperature compensation: higher temp = lower saturation
+    float do_saturation = 10.0;
+    float temp_correction = 1.0 - (last_temperature - 25.0) * 0.03;
+    float do_value = (percentage / 100.0) * do_saturation * temp_correction;
+
+    quality_flags = SENSOR_OK;
+    return constrain(do_value, 0.0, 20.0);
+  }
+
+  void calibrate() override {}
+
+  void load_calibration() override {
+    EEPROM.get(EEPROM_DO_CALIB_ZERO_ADDR, calib_zero_raw);
+    EEPROM.get(EEPROM_DO_CALIB_SPAN_ADDR, calib_span_raw);
+  }
+
+  void save_calibration() override {
+    EEPROM.put(EEPROM_DO_CALIB_ZERO_ADDR, calib_zero_raw);
+    EEPROM.put(EEPROM_DO_CALIB_SPAN_ADDR, calib_span_raw);
+  }
+
+  void set_temperature(float temp) { last_temperature = temp; }
+  void set_calib_zero(float raw) { calib_zero_raw = raw; }
+  void set_calib_span(float raw) { calib_span_raw = raw; }
+};
+
+// ============================================================
+// WATER LEVEL SENSOR CLASS
+// ============================================================
+
+class WaterLevelSensor : public Sensor {
+private:
+  float level_threshold;
+
+public:
+  WaterLevelSensor(int _pin) : Sensor(_pin), level_threshold(50.0) {
+    sensor_id = 5;
+    pinMode(pin, INPUT);
+  }
+
+  float read() override {
+    int digital_value = digitalRead(pin);
+
+    // Assuming: LOW = water present, HIGH = no water
+    // Convert to percentage (0-100%)
+    if (digital_value == LOW) {
+      raw_value = 100.0;  // Water level OK
+    } else {
+      raw_value = 0.0;    // Low water level
+    }
+
+    quality_flags = SENSOR_OK;
+    return raw_value;
+  }
+
+  void calibrate() override {}
+
+  void load_calibration() override {}
+
+  void save_calibration() override {}
+};
+
+// ============================================================
+// TURBIDITY SENSOR CLASS
+// ============================================================
+
+class TurbiditySensor : public Sensor {
+private:
+  float calib_clear_raw;  // Raw value for clear water (baseline)
+
+public:
+  TurbiditySensor(int _pin) : Sensor(_pin), calib_clear_raw(1023.0) {
+    sensor_id = 6;
+    load_calibration();
+  }
+
+  float read() override {
+    raw_value = 0.0;
+
+    for (int i = 0; i < 5; i++) {
+      raw_value += analogRead(pin);
+      delay(10);
+    }
+    raw_value /= 5.0;
+
+    if (raw_value < 0 || raw_value > 1023) {
+      quality_flags |= SENSOR_OUT_OF_RANGE;
+      return -1.0;
+    }
+
+    // Conversion formula: NTU = (raw_value / calib_clear_raw) * max_turbidity
+    // Assuming sensor range 0-1000 NTU
+    float turbidity = ((calib_clear_raw - raw_value) / calib_clear_raw) * 1000.0;
+
+    quality_flags = SENSOR_OK;
+    return constrain(turbidity, 0.0, 1000.0);
+  }
+
+  void calibrate() override {}
+
+  void load_calibration() override {
+    // Load clear water baseline - should be done during setup
+    // For now, use default (clear water = max voltage)
+  }
+
+  void save_calibration() override {
+    // Save clear water baseline
+  }
+
+  void set_calib_clear(float raw) { calib_clear_raw = raw; }
+};
+
+#endif // SENSORS_H

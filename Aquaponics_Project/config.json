@@ -1,0 +1,166 @@
+{
+  "hardware": {
+    "platform": "raspberry_pi",
+    "notes": "Change to 'arduino' to use Arduino Mega 2560/Uno instead",
+    "sensors": {
+      "pH": {
+        "enabled": true,
+        "pin": "A0",
+        "sensor_type": "analog",
+        "notes": "Analog pH sensor on Arduino ADC 0 / Raspberry Pi ADC channel 0"
+      },
+      "EC": {
+        "enabled": true,
+        "pin": "A1",
+        "sensor_type": "analog",
+        "notes": "EC/TDS sensor on Arduino ADC 1 / Raspberry Pi ADC channel 1"
+      },
+      "temperature": {
+        "enabled": true,
+        "pin": "4",
+        "sensor_type": "digital_1wire",
+        "notes": "DS18B20 on GPIO 4 (Raspberry Pi) or Pin 4 (Arduino)"
+      },
+      "DO": {
+        "enabled": true,
+        "pin": "A2",
+        "sensor_type": "analog",
+        "notes": "Dissolved Oxygen sensor on Arduino ADC 2 / Raspberry Pi ADC channel 2"
+      },
+      "water_level": {
+        "enabled": true,
+        "pin": "17",
+        "sensor_type": "digital",
+        "notes": "Float switch or capacitive sensor on GPIO 17 (Raspberry Pi) or Pin 17 (Arduino)"
+      },
+      "turbidity": {
+        "enabled": true,
+        "pin": "A3",
+        "sensor_type": "analog",
+        "notes": "Turbidity sensor on Arduino ADC 3 / Raspberry Pi ADC channel 3"
+      }
+    }
+  },
+  "monitoring": {
+    "reading_interval_seconds": 300,
+    "notes": "How often to read sensors (300 = 5 minutes)",
+    "averaging_window": 10,
+    "sensor_timeout_seconds": 30,
+    "alert_thresholds": {
+      "pH": {
+        "min": 5.5,
+        "max": 7.5,
+        "critical_min": 5.0,
+        "critical_max": 8.0,
+        "unit": "pH"
+      },
+      "EC": {
+        "min": 1200,
+        "max": 1600,
+        "critical_min": 1000,
+        "critical_max": 1800,
+        "unit": "μS/cm"
+      },
+      "temperature": {
+        "min": 18,
+        "max": 28,
+        "critical_min": 15,
+        "critical_max": 32,
+        "unit": "°C"
+      },
+      "DO": {
+        "min": 5,
+        "critical_min": 3,
+        "unit": "mg/L"
+      },
+      "water_level": {
+        "min": 60,
+        "critical_min": 40,
+        "unit": "%"
+      },
+      "turbidity": {
+        "max": 500,
+        "critical_max": 1000,
+        "unit": "NTU"
+      }
+    }
+  },
+  "database": {
+    "type": "sqlite",
+    "path": "./data/aquaponics.db",
+    "backup_path": "./data/backups/",
+    "auto_backup_interval_hours": 24,
+    "retention_days": 90,
+    "notes": "Circular buffer: data older than 90 days may be archived/deleted"
+  },
+  "calibration": {
+    "ph_calibration_points": [
+      {
+        "value": 4.0,
+        "name": "Acidic"
+      },
+      {
+        "value": 7.0,
+        "name": "Neutral"
+      },
+      {
+        "value": 10.0,
+        "name": "Alkaline"
+      }
+    ],
+    "ec_calibration_points": [
+      {
+        "value": 1000,
+        "name": "Low"
+      },
+      {
+        "value": 10000,
+        "name": "High"
+      }
+    ],
+    "do_calibration_points": [
+      {
+        "value": 0,
+        "name": "Zero (Nitrogen)"
+      },
+      {
+        "value": 100,
+        "name": "Span (Air-saturated)"
+      }
+    ],
+    "calibration_valid_days": 30,
+    "notes": "Recalibrate after 30 days - system will alert if calibration is stale"
+  },
+  "web_server": {
+    "host": "0.0.0.0",
+    "port": 5000,
+    "debug_mode": false,
+    "enable_https": false,
+    "certificates_path": "./certs/",
+    "notes": "For production, enable HTTPS with proper certificates"
+  },
+  "logging": {
+    "level": "INFO",
+    "notes": "DEBUG, INFO, WARNING, ERROR, CRITICAL",
+    "file_path": "./logs/aquaponics.log",
+    "max_file_size_mb": 10,
+    "backup_count": 5
+  },
+  "automation": {
+    "enable_pump_control": false,
+    "pump_activation_threshold_level": 40,
+    "enable_aeration_control": false,
+    "aeration_activation_do": 4.0,
+    "enable_temperature_alerts": true,
+    "notes": "Automation features require additional relay hardware"
+  },
+  "api": {
+    "enable_cors": true,
+    "allowed_origins": [
+      "http://localhost:5000",
+      "http://localhost:3000"
+    ],
+    "rate_limit_requests": 1000,
+    "rate_limit_window_seconds": 3600
+  }
+}
