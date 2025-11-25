@@ -56,10 +56,10 @@ private:
   float slope_high;         // Slope between pH 7.0 and 10.0
 
 public:
-  PHSensor(int _pin) : Sensor(_pin),
-                       calib_low_raw(200.0),
-                       calib_mid_raw(512.0),
-                       calib_high_raw(822.0),
+PHSensor(int _pin) : Sensor(_pin),
+                       calib_low_raw(450.0),  // pH 4.0 (산성) 예상 ADC 값 (약 2.2V)
+                       calib_mid_raw(307.0),  // pH 7.0 (중성) ADC 값 (1.5V = 약 307)
+                       calib_high_raw(160.0), // pH 10.0 (알칼리) 예상 ADC 값 (약 0.8V)
                        slope_low(1.0),
                        slope_high(1.0) {
     sensor_id = 1;
@@ -87,12 +87,18 @@ public:
 
     if (raw_value < calib_mid_raw) {
       // Between pH 4.0 and 7.0
-      slope_low = (7.0 - 4.0) / (calib_mid_raw - calib_low_raw);
-      ph_value = 4.0 + slope_low * (raw_value - calib_low_raw);
+      // V2 센서는 산성일수록 전압이 높으므로(450 > 307), raw_value가 mid보다 크면 산성 영역입니다.
+      // 하지만 코드는 범용성을 위해 로직을 그대로 둡니다. (slope 계산이 자동 보정함)
+      if (calib_low_raw != calib_mid_raw) {
+         slope_low = (7.0 - 4.0) / (calib_mid_raw - calib_low_raw);
+         ph_value = 4.0 + slope_low * (raw_value - calib_low_raw);
+      }
     } else {
       // Between pH 7.0 and 10.0
-      slope_high = (10.0 - 7.0) / (calib_high_raw - calib_mid_raw);
-      ph_value = 7.0 + slope_high * (raw_value - calib_mid_raw);
+      if (calib_high_raw != calib_mid_raw) {
+         slope_high = (10.0 - 7.0) / (calib_high_raw - calib_mid_raw);
+         ph_value = 7.0 + slope_high * (raw_value - calib_mid_raw);
+      }
     }
 
     quality_flags = SENSOR_OK;
@@ -100,25 +106,21 @@ public:
   }
 
   void calibrate() override {
-    // This should be called for each calibration point
     // Implementation done in main sketch
   }
 
   void load_calibration() override {
-    // Load calibration values from EEPROM
     EEPROM.get(EEPROM_PH_CALIB_LOW_ADDR, calib_low_raw);
     EEPROM.get(EEPROM_PH_CALIB_MID_ADDR, calib_mid_raw);
     EEPROM.get(EEPROM_PH_CALIB_HIGH_ADDR, calib_high_raw);
   }
 
   void save_calibration() override {
-    // Save calibration values to EEPROM
     EEPROM.put(EEPROM_PH_CALIB_LOW_ADDR, calib_low_raw);
     EEPROM.put(EEPROM_PH_CALIB_MID_ADDR, calib_mid_raw);
     EEPROM.put(EEPROM_PH_CALIB_HIGH_ADDR, calib_high_raw);
   }
 
-  // Setters for calibration data
   void set_calib_low(float raw) { calib_low_raw = raw; }
   void set_calib_mid(float raw) { calib_mid_raw = raw; }
   void set_calib_high(float raw) { calib_high_raw = raw; }
