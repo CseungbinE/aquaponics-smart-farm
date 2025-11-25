@@ -309,38 +309,64 @@ public:
 };
 
 // ============================================================
-// WATER LEVEL SENSOR CLASS
+// WATER LEVEL SENSOR CLASS (For KIT0139 / Analog)
 // ============================================================
 
 class WaterLevelSensor : public Sensor {
 private:
-  float level_threshold;
+  float tank_height_mm;    // 내 물탱크의 전체 높이 (mm)
+  float sensor_max_mm;     // 센서가 측정 가능한 최대 깊이 (KIT0139는 보통 5000mm)
+  
+  // 캘리브레이션용 상수 (4-20mA를 0-5V로 변환 시)
+  // 보통 120옴 저항 사용 시: 4mA = 0.48V, 20mA = 2.4V 정도 나옴
+  // 정확한 값은 설치 후 시리얼 모니터 보며 조정 필요
+  float voltage_empty;     // 물이 없을 때 센서 전압 (V)
+  float voltage_full;      // 센서 최대치일 때 전압 (V)
 
 public:
-  WaterLevelSensor(int _pin) : Sensor(_pin), level_threshold(50.0) {
+  // 생성자: 핀 번호
+  WaterLevelSensor(int _pin) : Sensor(_pin), 
+                               tank_height_mm(1000.0), // ★내 물탱크 높이(mm)로 수정하세요! (예: 1m = 1000.0)
+                               sensor_max_mm(5000.0),  // 센서 스펙: 5m
+                               voltage_empty(0.48),    // 4mA 일 때 예상 전압 (설치 후 보정 필요)
+                               voltage_full(2.4)       // 20mA 일 때 예상 전압
+  {
     sensor_id = 5;
-    pinMode(pin, INPUT);
+    // 아날로그 핀은 pinMode 설정 불필요
   }
 
   float read() override {
-    int digital_value = digitalRead(pin);
-
-    // Assuming: LOW = water present, HIGH = no water
-    // Convert to percentage (0-100%)
-    if (digital_value == LOW) {
-      raw_value = 100.0;  // Water level OK
-    } else {
-      raw_value = 0.0;    // Low water level
+    float total_raw = 0.0;
+    
+    // 1. 아날로그 값 읽기 (평균내기)
+    for (int i = 0; i < 10; i++) {
+      total_raw += analogRead(pin);
+      delay(10);
     }
+    float avg_raw = total_raw / 10.0;
+    
+    // 2. 전압으로 변환 (Arduino Mega: 5.0V 기준)
+    float voltage = avg_raw * (5.0 / 1023.0);
+    
+    // 3. 전압을 수심(mm)으로 변환 (선형 보간)
+    // 수심 = (현재전압 - 0수심전압) * (최대수심 / (최대전압 - 0수심전압))
+    float depth_mm = (voltage - voltage_empty) * (sensor_max_mm / (voltage_full - voltage_empty));
+    
+    // 4. 음수 값 보정 (노이즈)
+    if (depth_mm < 0) depth_mm = 0;
+
+    // 5. 탱크 높이 대비 퍼센트(%) 계산
+    float percentage = (depth_mm / tank_height_mm) * 100.0;
 
     quality_flags = SENSOR_OK;
-    return raw_value;
+    return constrain(percentage, 0.0, 100.0); // 0~100% 사이로 자름
   }
 
-  void calibrate() override {}
-
+  void calibrate() override {
+    // 필요 시 현재 수위를 0% 또는 100%로 설정하는 기능 구현 가능
+  }
+  
   void load_calibration() override {}
-
   void save_calibration() override {}
 };
 
@@ -388,8 +414,8 @@ public:
   }
 
   void save_calibration() override {
-    // Save clear water baseline
-  }
+    // Save clear water baselineE
+   }
 
   void set_calib_clear(float raw) { calib_clear_raw = raw; }
 };

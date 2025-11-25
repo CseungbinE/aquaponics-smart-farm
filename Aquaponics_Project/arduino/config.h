@@ -17,10 +17,10 @@
 #define EC_SENSOR_PIN           A1      // EC/TDS analog input
 #define DO_SENSOR_PIN           A2      // Dissolved Oxygen analog input
 #define TURBIDITY_SENSOR_PIN    A3      // Turbidity analog input
+#define WATER_LEVEL_PIN         A4      // KIT0139 Analog Sensor
 
 // Digital Pins
 #define TEMPERATURE_PIN         4       // DS18B20 OneWire data pin
-#define WATER_LEVEL_PIN         17      // Water level float switch
 #define SD_CHIP_SELECT_PIN      53      // SD card SPI chip select (Mega)
 #define RTC_SDA_PIN             20      // I2C SDA for DS3231 RTC
 #define RTC_SCL_PIN             21      // I2C SCL for DS3231 RTC
