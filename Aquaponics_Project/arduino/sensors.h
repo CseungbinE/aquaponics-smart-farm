@@ -257,19 +257,20 @@ public:
 };
 
 // ============================================================
-// DISSOLVED OXYGEN SENSOR CLASS
+// DISSOLVED OXYGEN SENSOR CLASS (SEN0237 Optimized)
 // ============================================================
 
 class DOSensor : public Sensor {
 private:
-  float calib_zero_raw;
-  float calib_span_raw;
-  float last_temperature;
+  float calib_do_raw;       // 100% 포화 상태(공기 중/포화수)에서의 ADC 값
+  float last_temperature;   // 온도 보정용
 
 public:
   DOSensor(int _pin) : Sensor(_pin),
-                       calib_zero_raw(0.0),
-                       calib_span_raw(1023.0),
+                       // [수정됨] SEN0237 초기값 설정
+                       // 이 센서는 포화 상태(100%)에서 약 1.6V ~ 2.0V를 출력합니다.
+                       // 5V Arduino ADC 기준: 1.8V는 약 368입니다. (기존 1023 아님!)
+                       calib_do_raw(368.0), 
                        last_temperature(25.0) {
     sensor_id = 4;
     load_calibration();
@@ -278,45 +279,63 @@ public:
   float read() override {
     raw_value = 0.0;
 
-    for (int i = 0; i < 5; i++) {
+    // 1. 읽기 및 평균
+    for (int i = 0; i < 10; i++) {
       raw_value += analogRead(pin);
       delay(10);
     }
-    raw_value /= 5.0;
+    raw_value /= 10.0;
 
-    if (raw_value < 0 || raw_value > 1023) {
-      quality_flags |= SENSOR_OUT_OF_RANGE;
-      return -1.0;
-    }
-
-    // Linear conversion: zero to span
-    float percentage = ((raw_value - calib_zero_raw) / (calib_span_raw - calib_zero_raw)) * 100.0;
-
-    // Convert percentage to mg/L (assuming 100% = 10 mg/L at sea level, 25°C)
-    // Temperature compensation: higher temp = lower saturation
-    float do_saturation = 10.0;
-    float temp_correction = 1.0 - (last_temperature - 25.0) * 0.03;
-    float do_value = (percentage / 100.0) * do_saturation * temp_correction;
+    // 2. DO 계산 로직 (SEN0237 전용 1-Point 방식)
+    // 공식: DO(mg/L) = (현재ADC / 캘리브레이션ADC) * 포화산소량
+    
+    // 온도에 따른 포화산소량 계산 공식 (약식)
+    // 온도가 오를수록 물에 녹을 수 있는 산소량(포화도)은 줄어듭니다.
+    float saturation_mg_L = 14.652 - 0.41022 * last_temperature + 0.007991 * last_temperature * last_temperature - 0.000077774 * last_temperature * last_temperature * last_temperature;
+    
+    // 현재 읽은 값과 캘리브레이션 값(100% 기준)의 비율
+    float ratio = raw_value / calib_do_raw;
+    
+    // 최종 DO 값 계산
+    float do_value = ratio * saturation_mg_L;
 
     quality_flags = SENSOR_OK;
     return constrain(do_value, 0.0, 20.0);
   }
 
-  void calibrate() override {}
+  // 캘리브레이션: 현재 상태를 100% 포화 상태로 저장
+  // 방법: 센서 끝을 공기 중에 두거나, 물 묻은 스펀지에 감싸고 실행
+  void calibrate() override {
+    float current_raw = 0.0;
+    for(int i=0; i<10; i++) {
+        current_raw += analogRead(pin);
+        delay(10);
+    }
+    calib_do_raw = current_raw / 10.0;
+    save_calibration();
+  }
+
+  // 외부 명령(main.ino) 호환용 함수
+  void set_calib_span(float raw) { 
+      calib_do_raw = raw; 
+  }
+  
+  // SEN0237은 0점 보정이 필요 없으므로 빈 함수로 남김
+  void set_calib_zero(float raw) { 
+      // Do nothing
+  }
 
   void load_calibration() override {
-    EEPROM.get(EEPROM_DO_CALIB_ZERO_ADDR, calib_zero_raw);
-    EEPROM.get(EEPROM_DO_CALIB_SPAN_ADDR, calib_span_raw);
+    EEPROM.get(EEPROM_DO_CALIB_SPAN_ADDR, calib_do_raw);
+    // 값이 비정상적이면(초기화 안 된 경우) 기본값(368) 사용
+    if(calib_do_raw < 10 || calib_do_raw > 1000) calib_do_raw = 368.0;
   }
 
   void save_calibration() override {
-    EEPROM.put(EEPROM_DO_CALIB_ZERO_ADDR, calib_zero_raw);
-    EEPROM.put(EEPROM_DO_CALIB_SPAN_ADDR, calib_span_raw);
+    EEPROM.put(EEPROM_DO_CALIB_SPAN_ADDR, calib_do_raw);
   }
 
   void set_temperature(float temp) { last_temperature = temp; }
-  void set_calib_zero(float raw) { calib_zero_raw = raw; }
-  void set_calib_span(float raw) { calib_span_raw = raw; }
 };
 
 // ============================================================
