@@ -127,19 +127,22 @@ PHSensor(int _pin) : Sensor(_pin),
 };
 
 // ============================================================
-// EC/TDS SENSOR CLASS
+// EC/TDS SENSOR CLASS (SEN0451 PRO Optimized)
 // ============================================================
 
 class ECSensor : public Sensor {
 private:
-  float calib_low_raw;      // Raw ADC at EC 1000
-  float calib_high_raw;     // Raw ADC at EC 10000
+  float calib_low_raw;      // Raw ADC at EC 1413 uS/cm
+  float calib_high_raw;     // Raw ADC at EC 12880 uS/cm
   float last_temperature;   // For temperature compensation
 
 public:
   ECSensor(int _pin) : Sensor(_pin),
-                       calib_low_raw(200.0),
-                       calib_high_raw(800.0),
+                       // [수정됨] SEN0451 (0~3.0V 출력) 기준 초기값 설정
+                       // Arduino 5V 기준: 3.0V는 약 614입니다.
+                       // 대략 1413us(Low)는 0.2~0.3V 근처, 12880us(High)는 2.0~2.2V 근처로 예상
+                       calib_low_raw(45.0),    // 초기 추정값 (Low Point)
+                       calib_high_raw(450.0),  // 초기 추정값 (High Point)
                        last_temperature(25.0) {
     sensor_id = 2;
     load_calibration();
@@ -148,32 +151,38 @@ public:
   float read() override {
     raw_value = 0.0;
 
-    // Read analog value
+    // 1. 읽기 및 평균 (노이즈 필터링)
     for (int i = 0; i < 5; i++) {
       raw_value += analogRead(pin);
       delay(10);
     }
     raw_value /= 5.0;
 
-    // Validate range
+    // 2. 범위 체크
     if (raw_value < 0 || raw_value > 1023) {
       quality_flags |= SENSOR_OUT_OF_RANGE;
       return -1.0;
     }
 
-    // Linear interpolation: raw_value to EC
-    float slope = (10000.0 - 1000.0) / (calib_high_raw - calib_low_raw);
-    float ec_value = 1000.0 + slope * (raw_value - calib_low_raw);
+    // 3. EC 변환 로직 (2-Point Linear Interpolation)
+    // 캘리브레이션 용액 기준: Low(1413), High(12880)을 많이 사용함
+    // config.h의 EC_CALIB_LOW / HIGH 값과 매핑됨
+    
+    // 기울기 계산
+    float slope = (12880.0 - 1413.0) / (calib_high_raw - calib_low_raw);
+    
+    // 현재 값 계산
+    float ec_value = 1413.0 + slope * (raw_value - calib_low_raw);
 
-    // Temperature compensation (2% per °C)
-    // Typical: normalize to 25°C
+    // 4. 온도 보정 (2.0% per °C)
+    // 온도가 높으면 전기가 더 잘 통하므로, 25도 기준으로 낮춰서 계산
     float temp_factor = 1.0 + EC_TEMP_COEFF * (last_temperature - 25.0) / 100.0;
     if (temp_factor > 0) {
       ec_value /= temp_factor;
     }
 
     quality_flags = SENSOR_OK;
-    return constrain(ec_value, 0.0, 2000.0);
+    return constrain(ec_value, 0.0, 20000.0); // SEN0451 Max 20ms/cm
   }
 
   void calibrate() override {}

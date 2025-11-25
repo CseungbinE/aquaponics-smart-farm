@@ -53,9 +53,9 @@
 // EC SENSOR CALIBRATION
 // ============================================================
 
-// EC calibration points (μS/cm)
-#define EC_CALIB_LOW            1000    // Low EC solution (1000 μS/cm)
-#define EC_CALIB_HIGH           10000   // High EC solution (10000 μS/cm)
+// [수정 후: SEN0451 표준 용액 기준]
+#define EC_CALIB_LOW            1413    // 표준 버퍼 용액 1.413 mS/cm
+#define EC_CALIB_HIGH           12880   // 표준 버퍼 용액 12.88 mS/cm
 
 // Raw ADC values at calibration points (stored in EEPROM)
 #define EEPROM_EC_CALIB_LOW_ADDR     12
