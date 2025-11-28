@@ -314,8 +314,9 @@ private:
 
 public:
   WaterLevelSensor(int _pin) : Sensor(_pin), 
-                               tank_height_mm(1000.0), // ★ 실제 물탱크 높이(mm)로 수정하세요!
-                               sensor_max_mm(5000.0),  // 센서 스펙상 최대 깊이
+                               // [수정 완료] config.h의 상수를 사용하여 유지보수성 향상
+                               tank_height_mm(TANK_HEIGHT_MM), 
+                               sensor_max_mm(SENSOR_MAX_DEPTH_MM),
                                voltage_full(2.3)       // 예상 최대 전압 (센서에 따라 조정)
   {
     sensor_id = 5;
