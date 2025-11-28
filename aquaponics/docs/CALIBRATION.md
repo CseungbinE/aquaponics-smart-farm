@@ -12,7 +12,7 @@ Proper sensor calibration is critical for accurate water quality monitoring. Thi
 | EC/TDS | Quarterly | 3 minutes | ±10 μS/cm |
 | Temperature | Not required | - | Factory calibrated |
 | DO | Quarterly | 10 minutes | ±0.5 mg/L |
-| Water Level | As needed | 1 minute | Threshold-based |
+| Water Level | Quarterly | 2 minutes | ±1 % |
 | Turbidity | Quarterly | 2 minutes | ±5 NTU |
 
 ---
