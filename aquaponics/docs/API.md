@@ -70,7 +70,7 @@ Retrieve the latest sensor readings and system status.
     "EC": 1350,
     "temperature": 24.5,
     "DO": 6.2,
-    "water_level": 95,
+    "water_level": 95.5, // Analog percentage (0-100%)
     "turbidity": 50,
     "status": "OK"
   },
@@ -353,7 +353,7 @@ Retrieve current system configuration.
 {
   "config": {
     "hardware": {
-      "platform": "raspberry_pi",
+      "platform": "arduino",
       "sensors": {
         // sensor configurations
       }
