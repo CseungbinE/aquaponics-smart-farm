@@ -267,16 +267,30 @@ Quarterly:
 
 ## Water Level Sensor Calibration
 
-Water level sensors are threshold-based (not continuous) and don't require multi-point calibration.
+The system uses an analog depth sensor to measure continuous water level (0-100%).
 
-### Adjustment
+### Configuration
 
+Ensure the tank dimensions are correctly set in the Arduino code (`arduino/sensors.h`):
+
+```cpp
+// In WaterLevelSensor class
+tank_height_mm(1000.0), // Set to your actual tank height in mm
 ```
-1. Position sensor at desired minimum water level
-2. Note GPIO state (HIGH or LOW)
-3. In config.json, set water_level_critical_min threshold
-4. Test by adding/removing water
-5. Verify alert triggers at correct level
+
+### Verification Procedure
+
+1. Empty State:
+   - Ensure tank is empty or sensor is out of water.
+   - Reading should be ~0%.
+
+2. Full State:
+   - Fill tank to maximum operating level.
+   - Reading should be ~100%.
+   - If reading is off, adjust `tank_height_mm` in firmware.
+
+3. Threshold Check:
+   - Verify alerts trigger when level drops below critical threshold (default 40%).
 ```
 
 ---
