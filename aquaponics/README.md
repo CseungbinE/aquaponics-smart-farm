@@ -46,24 +46,25 @@ Access the dashboard at: `http://localhost:5000`
 
 ```
 aquaponics/
-├── arduino/                 # Arduino implementation (C++)
+├── config.json             # System Configuration (Hardware, Thresholds, Database)
+├── arduino/                # Arduino implementation (C++)
 │   ├── main.ino            # Main sketch
 │   ├── sensors.h           # Sensor interface definitions
 │   ├── config.h            # Hardware configuration
 │   └── libraries/          # Third-party libraries
 ├── raspberry_pi/           # Raspberry Pi implementation (Python)
-│   ├── app/
-│   │   ├── main.py         # Application entry point
-│   │   ├── sensors.py      # Sensor classes
-│   │   ├── database.py     # SQLite ORM layer
-│   │   ├── api.py          # Flask API endpoints
-│   │   ├── dashboard.py    # Web server
-│   │   └── config.py       # Configuration management
-│   ├── tests/              # Unit & integration tests
-│   └── requirements.txt    # Python dependencies
+│   ├── requirements.txt    # Python dependencies
+│   └── app/
+│       ├── main.py         # Application entry point
+│       ├── sensors.py      # Sensor classes (Serial communication)
+│       ├── database.py     # SQLite management
+│       ├── api.py          # Flask API endpoints
+│       ├── alerts.py       # Alert logic
+│       ├── config.py       # Config loader
+│       └── dashboard.py    # Web dashboard view
 ├── docs/                   # Documentation
 ├── specs/                  # Specifications and data models
-└── config.json             # Default configuration template
+└── docker-compose.yml      # Docker deployment
 ```
 
 ## Sensor Specifications
@@ -74,7 +75,7 @@ aquaponics/
 | EC/TDS | Analog | 0-2000 μS/cm | ±10 μS/cm | 2-point (1000, 10000) |
 | Temperature | Digital (DS18B20) | -10 to +85°C | ±0.5°C | Factory calibrated |
 | DO | Analog/Digital | 0-20 mg/L | ±0.1 mg/L | 2-point (0%, 100%) |
-| Water Level | Digital | 0-100% | ±5% | Threshold-based |
+| Water Level | Analog | 0-100% | ±1% | Continuous (Depth based) |
 | Turbidity | Analog | 0-1000 NTU | ±10 NTU | 1-point (clear water) |
 
 ## Aquaponics Water Quality Targets
@@ -106,13 +107,13 @@ Edit `config.json` to customize:
 ```json
 {
   "hardware": {
-    "platform": "raspberry_pi",
+    "platform": "arduino",
     "sensors": {
       "pH": { "pin": "A0", "enabled": true },
       "EC": { "pin": "A1", "enabled": true },
       "temperature": { "pin": "4", "enabled": true },
       "DO": { "pin": "A2", "enabled": true },
-      "water_level": { "pin": "17", "enabled": true },
+      "water_level": { "pin": "A4", "enabled": true },
       "turbidity": { "pin": "A3", "enabled": true }
     }
   },
@@ -202,7 +203,7 @@ docker-compose up -d
 
 ## Hardware Wiring
 
-See `docs/WIRING_GUIDE.md` for detailed pin assignments and schematics.
+See `docs/HARDWARE_SETUP.md` for detailed pin assignments and schematics.
 
 ## Documentation
 

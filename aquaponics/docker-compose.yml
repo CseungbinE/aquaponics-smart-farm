@@ -16,15 +16,14 @@ services:
       - PYTHONUNBUFFERED=1
       - TZ=UTC
     devices:
-      # I2C device (for ADS1115 ADC)
-      - /dev/i2c-1:/dev/i2c-1
-      # 1-Wire device (for DS18B20 temperature sensor)
+      # [변경] Arduino Serial Connection (USB Cable)
+      # 상황에 따라 /dev/ttyACM0 일 수도 있습니다.
       - /dev/ttyUSB0:/dev/ttyUSB0
-      # GPIO access
-      - /dev/mem:/dev/mem
-      - /dev/gpiomem:/dev/gpiomem
-    cap_add:
-      - SYS_PTRACE
+      
+      # [삭제됨] I2C, GPIO, 1-Wire device mappings
+      # 센서 제어 권한이 Arduino로 넘어갔으므로 Pi 컨테이너에는 필요 없습니다.
+      
+    # [선택] 시리얼 통신 권한 문제가 생길 경우 privileged 모드 유지
     privileged: true
     restart: unless-stopped
     networks:

@@ -1,7 +1,7 @@
 {
   "hardware": {
-    "platform": "raspberry_pi",
-    "notes": "Change to 'arduino' to use Arduino Mega 2560/Uno instead",
+    "platform": "arduino",
+    "notes": "Arduino Mega 2560/Uno connected via USB",
     "sensors": {
       "pH": {
         "enabled": true,
@@ -29,9 +29,9 @@
       },
       "water_level": {
         "enabled": true,
-        "pin": "17",
-        "sensor_type": "digital",
-        "notes": "Float switch or capacitive sensor on GPIO 17 (Raspberry Pi) or Pin 17 (Arduino)"
+        "pin": "A4",
+        "sensor_type": "analog",
+        "notes": "Analog Depth Sensor on Arduino ADC 4"
       },
       "turbidity": {
         "enabled": true,

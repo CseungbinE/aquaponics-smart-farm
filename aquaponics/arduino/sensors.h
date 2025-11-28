@@ -10,6 +10,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <EEPROM.h>
+#include "config.h"
 
 // ============================================================
 // BASE SENSOR CLASS
