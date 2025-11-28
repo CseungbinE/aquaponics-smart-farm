@@ -6,11 +6,11 @@ This document provides detailed instructions for setting up the hardware compone
 
 ## Hardware Requirements
 
-### Arduino Implementation
+### Arduino Implementation (Sensor Node)
 
 **Main Board:**
-- Arduino Mega 2560 (recommended) or Arduino Uno (limited)
-- USB cable for programming
+- Arduino Mega 2560 (recommended) or Arduino Uno
+- USB cable for programming & data transmission
 - External power supply (12V, 1A minimum)
 
 **Sensors:**
@@ -18,40 +18,26 @@ This document provides detailed instructions for setting up the hardware compone
 - EC/TDS sensor module (analog 0-5V output)
 - DS18B20 temperature sensor (1-Wire)
 - Dissolved Oxygen sensor (analog 0-5V output)
-- Water level float switch or capacitive sensor
+- Water Level Depth sensor (analog 0-5V output)
 - Turbidity sensor (analog 0-5V output)
 
 **Accessories:**
 - Breadboard or prototyping shield
 - Jumper wires (male-to-male and male-to-female)
-- Resistors: 4.7kΩ (for 1-Wire), various values for voltage dividers
-- SD card module (optional, for data logging)
-- RTC DS3231 module (optional, for timestamps)
-- WiFi Shield ESP8266 (optional, for wireless communication)
+- Resistors: 4.7kΩ (for 1-Wire), various values for voltage dividers if needed
+- SD card module (optional, for local backup logging)
+- RTC DS3231 module (optional, for local timestamps)
 
-### Raspberry Pi Implementation
+### Raspberry Pi Implementation (Gateway & Server)
 
 **Main Board:**
 - Raspberry Pi 4B or 5 (minimum 2GB RAM)
 - microSD card (16GB minimum)
 - Power supply (5V, 3A for Pi 4B; 5V, 5A for Pi 5)
-- HDMI cable and display (for initial setup)
-- Ethernet cable or WiFi antenna
+- Ethernet cable or WiFi connectivity
 
-**Sensors:**
-- pH sensor (with analog output)
-- EC/TDS sensor (with analog output)
-- DS18B20 temperature sensor
-- Dissolved Oxygen sensor
-- Water level sensor
-- Turbidity sensor
-
-**Accessories:**
-- ADC converter (ADS1115 for Raspberry Pi analog inputs)
-- I2C cables
-- GPIO extension board
-- Cooling case with fan
-- Optional: Relay module for pump/aeration control
+**Connection:**
+- USB Cable (Type-A to Type-B) to connect Arduino
 
 ## Pin Assignments
 
@@ -61,28 +47,15 @@ This document provides detailed instructions for setting up the hardware compone
 |--------|-----|------|-------|
 | pH | A0 | Analog | Connected to ADC 0 |
 | EC/TDS | A1 | Analog | Connected to ADC 1 |
-| Temperature | 4 | Digital | 1-Wire protocol |
 | DO | A2 | Analog | Connected to ADC 2 |
 | Turbidity | A3 | Analog | Connected to ADC 3 |
-| Water Level | A4 | Analog | Connected to ADC 3 (0-5V Output) |
+| Water Level | A4 | Analog | Analog Depth Sensor (0-5V) |
+| Temperature | 4 | Digital | 1-Wire protocol (requires 4.7kΩ pull-up) |
 | SD Chip Select | 53 | Digital | SPI protocol |
 | RTC SDA | 20 | Digital | I2C SDA |
 | RTC SCL | 21 | Digital | I2C SCL |
 
-### Raspberry Pi GPIO
-
-| Sensor | GPIO | Type | Notes |
-|--------|------|------|-------|
-| Temperature | 4 | Digital | 1-Wire protocol |
-| Water Level | 17 | Digital | Digital input |
-| Pump Control | 27 | Digital | GPIO output (optional) |
-| Aeration Control | 22 | Digital | GPIO output (optional) |
-
-**Analog Sensors (via ADS1115):**
-- A0 → pH sensor
-- A1 → EC/TDS sensor
-- A2 → DO sensor
-- A3 → Turbidity sensor
+> **Note:** Raspberry Pi connects to Arduino via USB Port (Serial Communication). No direct sensor wiring to Raspberry Pi GPIO is required.
 
 ## Wiring Diagrams
 
@@ -123,12 +96,13 @@ DO Sensor Module:
 - Signal (out) → Arduino A2
 ```
 
-### Water Level Float Switch
+### Water Level Sensor (Analog)
 
 ```
-Float Switch:
-- Terminal 1 → Arduino Pin 17
-- Terminal 2 → Arduino GND
+Depth Sensor Module:
+- VCC → Arduino 5V
+- GND → Arduino GND
+- Signal (out) → Arduino A4
 ```
 
 ### Turbidity Sensor
@@ -138,19 +112,6 @@ Turbidity Sensor Module:
 - VCC → Arduino 5V
 - GND → Arduino GND
 - Signal (out) → Arduino A3
-```
-
-### ADS1115 ADC (for Raspberry Pi)
-
-```
-I2C Connection:
-- SDA → Raspberry Pi GPIO 2
-- SCL → Raspberry Pi GPIO 3
-- VCC → Raspberry Pi 3.3V
-- GND → Raspberry Pi GND
-
-Analog Input Connection (example for pH):
-- A0 → pH sensor signal
 ```
 
 ## Assembly Steps
@@ -163,43 +124,37 @@ Analog Input Connection (example for pH):
 
 2. **Install power:**
    - Connect external 12V power supply to Arduino VIN and GND
-   - OR use USB power (limited to 500mA)
+   - (Alternatively, power via USB for testing)
 
-3. **Connect analog sensors (pH, EC, DO, Turbidity):**
+3. **Connect analog sensors (pH, EC, DO, Turbidity, Water Level):**
    - Connect all VCC lines to 5V rail
    - Connect all GND lines to GND rail
-   - Connect signal outputs to respective analog pins (A0-A3)
+   - Connect signal outputs to respective analog pins (A0-A4)
 
 4. **Connect digital sensors:**
-   - Connect DS18B20 with pull-up resistor
-   - Connect water level float switch to GPIO 17
-   - Connect RTC DS3231 via I2C (SDA/SCL)
+   - Connect DS18B20 Data pin to Pin 4 with 4.7kΩ pull-up resistor
+   - Connect RTC DS3231 via I2C (SDA -> Pin 20, SCL -> Pin 21)
 
 5. **Install SD card module (optional):**
-   - Connect SPI lines: MOSI, MISO, SCK, CS
-   - CS connected to pin 53
+   - Connect SPI lines: MOSI(51), MISO(50), SCK(52), CS(53)
 
 6. **Program Arduino:**
    - Upload `main.ino` using Arduino IDE
-   - Verify all sensors are reading correctly
+   - Verify all sensors are reading correctly in Serial Monitor
 
 ### Raspberry Pi Setup
 
 1. **Initial OS Setup:**
    ```bash
-   # Write Raspbian to microSD card using Raspberry Pi Imager
-   # Boot Raspberry Pi with keyboard, mouse, and HDMI display
-   # Run initial configuration
-   sudo raspi-config
-   # Enable I2C, SPI, and 1-Wire
+   # Install Raspberry Pi OS
+   # Connect to network (WiFi/Ethernet)
    ```
 
-2. **Connect sensors:**
-   - Mount Raspberry Pi in case
-   - Install ADS1115 ADC converter on I2C bus
-   - Connect temperature sensor to GPIO 4
-   - Connect water level sensor to GPIO 17
-   - Connect analog sensors to ADS1115 inputs
+2. **Hardware Connection:**
+   ```bash
+   - Connect the Arduino to the Raspberry Pi using a **USB cable**.
+   - No GPIO wiring is needed on the Raspberry Pi.
+   ```
 
 3. **Install software:**
    ```bash
