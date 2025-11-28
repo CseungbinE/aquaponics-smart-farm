@@ -139,6 +139,9 @@ grep ERROR logs/aquaponics.log
 ## Docker Quick Start
 
 ```bash
+# Ensure you are in the project root
+cd ..  # If you were in raspberry_pi/ directory
+
 # Build image
 docker build -t aquaponics:latest .
 
@@ -283,32 +286,25 @@ See `TROUBLESHOOTING.md` for more help.
 
 ```
 aquaponics/
-├── README.md              # Overview
-├── config.json            # Configuration
-├── Dockerfile             # Docker image
-├── docker-compose.yml     # Docker setup
-├── arduino/               # Arduino implementation
-│   ├── main.ino          # Main sketch
-│   ├── config.h          # Configuration
-│   └── sensors.h         # Sensor definitions
-├── raspberry_pi/          # Raspberry Pi implementation
-│   ├── requirements.txt   # Python dependencies
-│   ├── app/
-│   │   ├── main.py       # Application entry
-│   │   ├── sensors.py    # Sensor classes
-│   │   ├── database.py   # Database layer
-│   │   ├── api.py        # API endpoints
-│   │   ├── alerts.py     # Alert system
-│   │   └── dashboard.py  # Web dashboard
-│   └── tests/            # Unit tests
-├── docs/                  # Documentation
-│   ├── QUICKSTART.md      # This file
-│   ├── INSTALLATION.md    # Detailed setup
-│   ├── HARDWARE_SETUP.md  # Hardware guide
-│   ├── CALIBRATION.md     # Calibration procedures
-│   ├── API.md             # API reference
-│   └── TROUBLESHOOTING.md # Problem solving
-└── specs/                 # Specifications
+├── config.json             # System Configuration (Hardware, Thresholds, Database)
+├── arduino/                # Arduino implementation (C++)
+│   ├── main.ino            # Main sketch
+│   ├── sensors.h           # Sensor interface definitions
+│   ├── config.h            # Hardware configuration
+│   └── libraries/          # Third-party libraries
+├── raspberry_pi/           # Raspberry Pi implementation (Python)
+│   ├── requirements.txt    # Python dependencies
+│   └── app/
+│       ├── main.py         # Application entry point
+│       ├── sensors.py      # Sensor classes (Serial communication)
+│       ├── database.py     # SQLite management
+│       ├── api.py          # Flask API endpoints
+│       ├── alerts.py       # Alert logic
+│       ├── config.py       # Config loader
+│       └── dashboard.py    # Web dashboard view
+├── docs/                   # Documentation
+├── specs/                  # Specifications and data models
+└── docker-compose.yml      # Docker deployment
 ```
 
 ---
