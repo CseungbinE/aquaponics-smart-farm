@@ -33,6 +33,8 @@
 #define SENSOR_READ_INTERVAL    300000  // 5 minutes (300 seconds)
 #define AVERAGING_WINDOW        10      // Number of readings to average
 #define SENSOR_TIMEOUT          30000   // 30 second timeout per sensor
+#define TANK_HEIGHT_MM          1000.0  // Water tank depth in mm
+#define SENSOR_MAX_DEPTH_MM     5000.0  // Max depth sensor can read
 
 // ============================================================
 // PH SENSOR CALIBRATION
