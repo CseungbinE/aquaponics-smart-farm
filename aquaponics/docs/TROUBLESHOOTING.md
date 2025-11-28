@@ -137,38 +137,30 @@ sqlite3 data/aquaponics.db \
 **Symptom:** Log shows "Sensor timeout" or "SENSOR_TIMEOUT" flags
 
 **Possible Causes:**
-- Sensor disconnected
-- 1-Wire communication issue (Temperature)
-- I2C communication failure (if using ADC)
-- Sensor power supply issue
+- Arduino disconnected from Raspberry Pi
+- USB cable fault
+- Arduino sketch not running (or stuck)
+- Sensor disconnected from Arduino
 
 **Solutions:**
 
 ```bash
-# Check sensor power
-# Verify 5V supply is connected to sensor VCC
+# 1. Check USB Connection
+ls /dev/ttyUSB* /dev/ttyACM*
+# Should list /dev/ttyUSB0 or similar
 
-# For 1-Wire sensors (DS18B20)
-# Check 4.7kΩ pull-up resistor is installed
-# Verify data pin is connected to GPIO 4
+# 2. Check Permissions
+ls -l /dev/ttyUSB0
+# User should have read/write access (usually 'dialout' group)
 
-# For I2C sensors (ADS1115)
-# List I2C devices
-sudo i2cdetect -y 1
+# 3. Test Serial Communication
+# Install minicom if needed: sudo apt install minicom
+minicom -D /dev/ttyUSB0 -b 115200
+# Should see JSON data stream: {"timestamp":..., "pH":...}
 
-# For Raspberry Pi:
-# Check I2C is enabled
-sudo raspi-config
-# → Interface Options → I2C → Enable
-
-# Verify wiring
-# Use ohmmeter to check continuity
-# All connections should be < 1Ω resistance
-
-# Test sensor communication
-# For DS18B20:
-cat /sys/bus/w1/devices/*/w1_slave
-# Should show valid temperature values
+# 4. Check Arduino Hardware
+# Verify sensors are connected to Arduino pins as per config.h
+# Check Arduino power LED is on
 ```
 
 ---
@@ -243,8 +235,8 @@ python -m json.tool config.json
 # Check database connectivity
 python -c "from app.database import DatabaseManager; db = DatabaseManager(); print(db.get_latest_reading())"
 
-# Test individual components
-python -c "from app.sensors import SensorArray; s = SensorArray(); print(s.read_all())"
+# Test individual components (Serial Manager)
+python -c "from app.config import Config; from app.sensors import SerialSensorManager; conf = Config(); s = SerialSensorManager(conf); print(s.read_all())"
 
 # Check memory usage
 free -h
@@ -433,34 +425,29 @@ sudo netstat -tlnp | grep 5000
 
 ### Test Sensor Hardware Directly
 
-**Arduino:**
-```
-# Connect with Serial Monitor
-# Baud: 115200
-# Issue commands:
-STATUS  # Get sensor status
-```
+**Arduino (via Serial Monitor):**
+1. Connect Arduino to PC
+2. Open Serial Monitor (Baud 115200)
+3. Check if JSON data stream appears
+4. Send command `STATUS` to check sensor health
 
-**Raspberry Pi:**
+**Raspberry Pi (via Terminal):**
 ```bash
-# Test 1-Wire (Temperature)
-cat /sys/bus/w1/devices/*/w1_slave
-
-# Test I2C (ADC)
-sudo i2cdetect -y 1
-
-# Read raw values
+# Read raw serial data directly from Python
 python3 -c "
-import board
-import busio
-import adafruit_ads1x15.analog_in as AnalogIn
-from adafruit_ads1x15.analog_in import AnalogIn
-import adafruit_ads1x15 as ads1x15
+import serial
+import time
 
-i2c = busio.I2C(board.SCL, board.SDA)
-ads = ads1x15.Ads1115(i2c)
-channel = AnalogIn(ads, ads1x15.P0)
-print(f'A0: {channel.value}')
+try:
+    ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+    time.sleep(2) # Wait for connection
+    if ser.in_waiting > 0:
+        print(ser.readline().decode('utf-8').strip())
+    else:
+        print('No data waiting...')
+    ser.close()
+except Exception as e:
+    print(f'Error: {e}')
 "
 ```
 
