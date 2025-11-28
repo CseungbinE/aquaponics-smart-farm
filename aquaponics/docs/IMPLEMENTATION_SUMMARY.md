@@ -103,7 +103,7 @@ All 18 planned implementation tasks have been successfully completed.
 ---
 
 ### 5. Configuration System ✅
-**Configuration File:** `config.json`
+**Configuration File:** `config.json` (Located at Project Root)
 - Hardware platform selection (Arduino/Raspberry Pi)
 - Sensor enable/disable flags
 - Pin assignments
@@ -495,9 +495,9 @@ This is a **complete, production-ready** aquaponics monitoring system featuring:
 
 ## Version Information
 
-- **Version:** 1.0.0
-- **Release Date:** 2025-11-13
-- **Status:** Complete ✅
+- **Version:** 1.1.0
+- **Release Date:** 2025-11-29
+- **Status:** Architecture Refactored & Optimized ✅
 - **Python:** 3.9+
 - **Arduino IDE:** 1.8.19+
 - **Raspberry Pi OS:** Bullseye or later
