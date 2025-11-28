@@ -63,8 +63,8 @@ This document provides detailed instructions for setting up the hardware compone
 | EC/TDS | A1 | Analog | Connected to ADC 1 |
 | Temperature | 4 | Digital | 1-Wire protocol |
 | DO | A2 | Analog | Connected to ADC 2 |
-| Water Level | 17 | Digital | Digital input |
 | Turbidity | A3 | Analog | Connected to ADC 3 |
+| Water Level | A4 | Analog | Connected to ADC 3 (0-5V Output) |
 | SD Chip Select | 53 | Digital | SPI protocol |
 | RTC SDA | 20 | Digital | I2C SDA |
 | RTC SCL | 21 | Digital | I2C SCL |

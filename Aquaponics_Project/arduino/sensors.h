@@ -1,6 +1,6 @@
 /**
  * Aquaponics Smart Farm - Sensor Classes
- * Implements interfaces for pH, EC, Temperature, DO, Water Level, and Turbidity sensors
+ * Optimized for DFRobot Gravity Series Sensors
  */
 
 #ifndef SENSORS_H
@@ -43,7 +43,7 @@ public:
 };
 
 // ============================================================
-// PH SENSOR CLASS
+// PH SENSOR CLASS (Target: Gravity SEN0161-V2)
 // ============================================================
 
 class PHSensor : public Sensor {
@@ -56,10 +56,12 @@ private:
   float slope_high;         // Slope between pH 7.0 and 10.0
 
 public:
-PHSensor(int _pin) : Sensor(_pin),
-                       calib_low_raw(450.0),  // pH 4.0 (산성) 예상 ADC 값 (약 2.2V)
-                       calib_mid_raw(307.0),  // pH 7.0 (중성) ADC 값 (1.5V = 약 307)
-                       calib_high_raw(160.0), // pH 10.0 (알칼리) 예상 ADC 값 (약 0.8V)
+  PHSensor(int _pin) : Sensor(_pin),
+                       // DFRobot V2 pH 센서는 중성(7.0)에서 약 1.5V 출력 (5V 아두이노 기준 ADC ~307)
+                       // 산성(4.0)은 약 2.0V (ADC ~410), 알칼리(10.0)는 약 1.0V (ADC ~205)
+                       calib_low_raw(410.0),
+                       calib_mid_raw(307.0),
+                       calib_high_raw(205.0),
                        slope_low(1.0),
                        slope_high(1.0) {
     sensor_id = 1;
@@ -68,36 +70,31 @@ PHSensor(int _pin) : Sensor(_pin),
 
   float read() override {
     raw_value = 0.0;
-
-    // Read analog value multiple times and average
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 10; i++) { // 평균 샘플링 증가
       raw_value += analogRead(pin);
-      delay(10);
+      delay(5);
     }
-    raw_value /= 5.0;
+    raw_value /= 10.0;
 
-    // Validate range
     if (raw_value < 0 || raw_value > 1023) {
       quality_flags |= SENSOR_OUT_OF_RANGE;
       return -1.0;
     }
 
-    // Convert to pH using 3-point calibration
-    float ph_value = 0.0;
+    float ph_value = 7.0;
 
-    if (raw_value < calib_mid_raw) {
-      // Between pH 4.0 and 7.0
-      // V2 센서는 산성일수록 전압이 높으므로(450 > 307), raw_value가 mid보다 크면 산성 영역입니다.
-      // 하지만 코드는 범용성을 위해 로직을 그대로 둡니다. (slope 계산이 자동 보정함)
+    // 3-Point Calibration Logic (Piecewise Linear)
+    if (raw_value > calib_mid_raw) { 
+      // V2 센서는 pH가 낮을수록 전압이 높습니다 (산성 영역)
       if (calib_low_raw != calib_mid_raw) {
-         slope_low = (7.0 - 4.0) / (calib_mid_raw - calib_low_raw);
-         ph_value = 4.0 + slope_low * (raw_value - calib_low_raw);
+         slope_low = (7.0 - 4.0) / (calib_low_raw - calib_mid_raw); // 기울기 계산
+         ph_value = 7.0 - slope_low * (raw_value - calib_mid_raw);
       }
     } else {
-      // Between pH 7.0 and 10.0
-      if (calib_high_raw != calib_mid_raw) {
-         slope_high = (10.0 - 7.0) / (calib_high_raw - calib_mid_raw);
-         ph_value = 7.0 + slope_high * (raw_value - calib_mid_raw);
+      // 알칼리 영역
+      if (calib_mid_raw != calib_high_raw) {
+         slope_high = (10.0 - 7.0) / (calib_mid_raw - calib_high_raw);
+         ph_value = 7.0 + slope_high * (calib_mid_raw - raw_value);
       }
     }
 
@@ -105,9 +102,7 @@ PHSensor(int _pin) : Sensor(_pin),
     return constrain(ph_value, 0.0, 14.0);
   }
 
-  void calibrate() override {
-    // Implementation done in main sketch
-  }
+  void calibrate() override {} // Main sketch handles serial commands
 
   void load_calibration() override {
     EEPROM.get(EEPROM_PH_CALIB_LOW_ADDR, calib_low_raw);
@@ -127,22 +122,22 @@ PHSensor(int _pin) : Sensor(_pin),
 };
 
 // ============================================================
-// EC/TDS SENSOR CLASS (SEN0451 PRO Optimized)
+// EC SENSOR CLASS (Target: Gravity SEN0244 TDS Sensor)
+// Note: This sensor measures TDS (ppm). We convert to EC (uS/cm).
 // ============================================================
 
 class ECSensor : public Sensor {
 private:
-  float calib_low_raw;      // Raw ADC at EC 1413 uS/cm
-  float calib_high_raw;     // Raw ADC at EC 12880 uS/cm
-  float last_temperature;   // For temperature compensation
+  float calib_low_raw;      // Raw ADC at Low Standard
+  float calib_high_raw;     // Raw ADC at High Standard
+  float last_temperature;   
 
 public:
   ECSensor(int _pin) : Sensor(_pin),
-                       // [수정됨] SEN0451 (0~3.0V 출력) 기준 초기값 설정
-                       // Arduino 5V 기준: 3.0V는 약 614입니다.
-                       // 대략 1413us(Low)는 0.2~0.3V 근처, 12880us(High)는 2.0~2.2V 근처로 예상
-                       calib_low_raw(45.0),    // 초기 추정값 (Low Point)
-                       calib_high_raw(450.0),  // 초기 추정값 (High Point)
+                       // SEN0244 출력 범위: 0 ~ 2.3V
+                       // 5V Arduino ADC 기준: 0 ~ 471
+                       calib_low_raw(50.0),    // 대략적인 Low Point
+                       calib_high_raw(400.0),  // 대략적인 High Point (2.3V 근처)
                        last_temperature(25.0) {
     sensor_id = 2;
     load_calibration();
@@ -150,39 +145,40 @@ public:
 
   float read() override {
     raw_value = 0.0;
-
-    // 1. 읽기 및 평균 (노이즈 필터링)
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 10; i++) {
       raw_value += analogRead(pin);
-      delay(10);
+      delay(5);
     }
-    raw_value /= 5.0;
+    raw_value /= 10.0;
 
-    // 2. 범위 체크
+    // SEN0244는 전압이 2.3V를 넘지 않음
     if (raw_value < 0 || raw_value > 1023) {
       quality_flags |= SENSOR_OUT_OF_RANGE;
       return -1.0;
     }
 
-    // 3. EC 변환 로직 (2-Point Linear Interpolation)
-    // 캘리브레이션 용액 기준: Low(1413), High(12880)을 많이 사용함
-    // config.h의 EC_CALIB_LOW / HIGH 값과 매핑됨
+    // 1. Calculate TDS (ppm) using 2-Point Calibration
+    // config.h의 EC_CALIB 값들은 uS/cm 단위이므로, 
+    // 여기서 ppm으로 매핑하기 위해 0.5를 곱해 TDS 기준으로 기울기를 구합니다.
+    // (일반적인 변환: 1 EC (uS/cm) = 0.5 TDS (ppm))
     
-    // 기울기 계산
-    float slope = (12880.0 - 1413.0) / (calib_high_raw - calib_low_raw);
+    float tds_low = EC_CALIB_LOW * 0.5;
+    float tds_high = EC_CALIB_HIGH * 0.5;
     
-    // 현재 값 계산
-    float ec_value = 1413.0 + slope * (raw_value - calib_low_raw);
+    float slope = (tds_high - tds_low) / (calib_high_raw - calib_low_raw);
+    float tds_value = tds_low + slope * (raw_value - calib_low_raw);
 
-    // 4. 온도 보정 (2.0% per °C)
-    // 온도가 높으면 전기가 더 잘 통하므로, 25도 기준으로 낮춰서 계산
-    float temp_factor = 1.0 + EC_TEMP_COEFF * (last_temperature - 25.0) / 100.0;
+    // 2. Temperature Compensation for TDS
+    float temp_factor = 1.0 + 0.02 * (last_temperature - 25.0); // 2% per degC
     if (temp_factor > 0) {
-      ec_value /= temp_factor;
+        tds_value /= temp_factor;
     }
 
+    // 3. Convert TDS (ppm) back to EC (uS/cm) for system consistency
+    float ec_value = tds_value * 2.0; 
+
     quality_flags = SENSOR_OK;
-    return constrain(ec_value, 0.0, 20000.0); // SEN0451 Max 20ms/cm
+    return constrain(ec_value, 0.0, 20000.0);
   }
 
   void calibrate() override {}
@@ -203,7 +199,7 @@ public:
 };
 
 // ============================================================
-// TEMPERATURE SENSOR CLASS (DS18B20)
+// TEMPERATURE SENSOR CLASS (Target: DFR0194 / DS18B20)
 // ============================================================
 
 class TemperatureSensor : public Sensor {
@@ -226,18 +222,12 @@ public:
 
   float read() override {
     sensors->requestTemperatures();
-    delay(800);  // Wait for conversion
-
+    // DS18B20 변환 대기 시간은 해상도에 따라 다르지만 800ms면 충분함
+    
     raw_value = sensors->getTempCByIndex(0);
 
-    // Check for error
-    if (raw_value == DEVICE_DISCONNECTED_C) {
+    if (raw_value == DEVICE_DISCONNECTED_C || raw_value < -50.0) {
       quality_flags |= SENSOR_ERROR;
-      return -999.0;
-    }
-
-    if (raw_value < -10.0 || raw_value > 85.0) {
-      quality_flags |= SENSOR_OUT_OF_RANGE;
       return -999.0;
     }
 
@@ -246,31 +236,22 @@ public:
   }
 
   void calibrate() override {}
-
-  void load_calibration() override {
-    // DS18B20 is factory calibrated
-  }
-
-  void save_calibration() override {
-    // DS18B20 is factory calibrated
-  }
+  void load_calibration() override {}
+  void save_calibration() override {}
 };
 
 // ============================================================
-// DISSOLVED OXYGEN SENSOR CLASS (SEN0237 Optimized)
+// DO SENSOR CLASS (Target: Gravity SEN0237)
 // ============================================================
 
 class DOSensor : public Sensor {
 private:
-  float calib_do_raw;       // 100% 포화 상태(공기 중/포화수)에서의 ADC 값
-  float last_temperature;   // 온도 보정용
+  float calib_do_raw;       // ADC at 100% saturation
+  float last_temperature;
 
 public:
   DOSensor(int _pin) : Sensor(_pin),
-                       // [수정됨] SEN0237 초기값 설정
-                       // 이 센서는 포화 상태(100%)에서 약 1.6V ~ 2.0V를 출력합니다.
-                       // 5V Arduino ADC 기준: 1.8V는 약 368입니다. (기존 1023 아님!)
-                       calib_do_raw(368.0), 
+                       calib_do_raw(327.0), // SEN0237 Saturation Voltage ~1.6V (ADC ~327 @ 5V)
                        last_temperature(25.0) {
     sensor_id = 4;
     load_calibration();
@@ -278,33 +259,23 @@ public:
 
   float read() override {
     raw_value = 0.0;
-
-    // 1. 읽기 및 평균
     for (int i = 0; i < 10; i++) {
       raw_value += analogRead(pin);
-      delay(10);
+      delay(5);
     }
     raw_value /= 10.0;
 
-    // 2. DO 계산 로직 (SEN0237 전용 1-Point 방식)
-    // 공식: DO(mg/L) = (현재ADC / 캘리브레이션ADC) * 포화산소량
-    
-    // 온도에 따른 포화산소량 계산 공식 (약식)
-    // 온도가 오를수록 물에 녹을 수 있는 산소량(포화도)은 줄어듭니다.
+    // Calculate Saturation Concentration (mg/L) based on temp
     float saturation_mg_L = 14.652 - 0.41022 * last_temperature + 0.007991 * last_temperature * last_temperature - 0.000077774 * last_temperature * last_temperature * last_temperature;
     
-    // 현재 읽은 값과 캘리브레이션 값(100% 기준)의 비율
+    // Ratio calculation
     float ratio = raw_value / calib_do_raw;
-    
-    // 최종 DO 값 계산
     float do_value = ratio * saturation_mg_L;
 
     quality_flags = SENSOR_OK;
     return constrain(do_value, 0.0, 20.0);
   }
 
-  // 캘리브레이션: 현재 상태를 100% 포화 상태로 저장
-  // 방법: 센서 끝을 공기 중에 두거나, 물 묻은 스펀지에 감싸고 실행
   void calibrate() override {
     float current_raw = 0.0;
     for(int i=0; i<10; i++) {
@@ -315,20 +286,12 @@ public:
     save_calibration();
   }
 
-  // 외부 명령(main.ino) 호환용 함수
-  void set_calib_span(float raw) { 
-      calib_do_raw = raw; 
-  }
-  
-  // SEN0237은 0점 보정이 필요 없으므로 빈 함수로 남김
-  void set_calib_zero(float raw) { 
-      // Do nothing
-  }
+  void set_calib_span(float raw) { calib_do_raw = raw; }
+  void set_calib_zero(float raw) {} 
 
   void load_calibration() override {
     EEPROM.get(EEPROM_DO_CALIB_SPAN_ADDR, calib_do_raw);
-    // 값이 비정상적이면(초기화 안 된 경우) 기본값(368) 사용
-    if(calib_do_raw < 10 || calib_do_raw > 1000) calib_do_raw = 368.0;
+    if(calib_do_raw < 10 || calib_do_raw > 1000) calib_do_raw = 327.0;
   }
 
   void save_calibration() override {
@@ -339,87 +302,71 @@ public:
 };
 
 // ============================================================
-// WATER LEVEL SENSOR CLASS (For KIT0139 / Analog)
+// WATER LEVEL SENSOR CLASS (Generic Analog)
 // ============================================================
 
 class WaterLevelSensor : public Sensor {
 private:
-  float tank_height_mm;    // 내 물탱크의 전체 높이 (mm)
-  float sensor_max_mm;     // 센서가 측정 가능한 최대 깊이 (KIT0139는 보통 5000mm)
-  
-  // 캘리브레이션용 상수 (4-20mA를 0-5V로 변환 시)
-  // 보통 120옴 저항 사용 시: 4mA = 0.48V, 20mA = 2.4V 정도 나옴
-  // 정확한 값은 설치 후 시리얼 모니터 보며 조정 필요
-  float voltage_empty;     // 물이 없을 때 센서 전압 (V)
-  float voltage_full;      // 센서 최대치일 때 전압 (V)
+  float tank_height_mm;    
+  float sensor_max_mm;     
+  float voltage_full;      
 
 public:
-  // 생성자: 핀 번호
   WaterLevelSensor(int _pin) : Sensor(_pin), 
-                               tank_height_mm(1000.0), // ★내 물탱크 높이(mm)로 수정하세요! (예: 1m = 1000.0)
-                               sensor_max_mm(5000.0),  // 센서 스펙: 5m
-                               voltage_empty(0.48),    // 4mA 일 때 예상 전압 (설치 후 보정 필요)
-                               voltage_full(2.4)       // 20mA 일 때 예상 전압
+                               tank_height_mm(1000.0), // ★ 실제 물탱크 높이(mm)로 수정하세요!
+                               sensor_max_mm(5000.0),  // 센서 스펙상 최대 깊이
+                               voltage_full(2.3)       // 예상 최대 전압 (센서에 따라 조정)
   {
     sensor_id = 5;
-    // 아날로그 핀은 pinMode 설정 불필요
   }
 
   float read() override {
     float total_raw = 0.0;
-    
-    // 1. 아날로그 값 읽기 (평균내기)
     for (int i = 0; i < 10; i++) {
       total_raw += analogRead(pin);
-      delay(10);
+      delay(5);
     }
     float avg_raw = total_raw / 10.0;
     
-    // 2. 전압으로 변환 (Arduino Mega: 5.0V 기준)
+    // Convert to Voltage (5V Ref)
     float voltage = avg_raw * (5.0 / 1023.0);
     
-    // 3. 전압을 수심(mm)으로 변환 (선형 보간)
-    // 수심 = (현재전압 - 0수심전압) * (최대수심 / (최대전압 - 0수심전압))
-    float depth_mm = (voltage - voltage_empty) * (sensor_max_mm / (voltage_full - voltage_empty));
+    // Calculate Depth & Percentage
+    float depth_mm = 0.0;
+    if (voltage > 0.05) { // Noise filter
+        depth_mm = (voltage / voltage_full) * sensor_max_mm;
+    }
     
-    // 4. 음수 값 보정 (노이즈)
-    if (depth_mm < 0) depth_mm = 0;
-
-    // 5. 탱크 높이 대비 퍼센트(%) 계산
     float percentage = (depth_mm / tank_height_mm) * 100.0;
 
     quality_flags = SENSOR_OK;
-    return constrain(percentage, 0.0, 100.0); // 0~100% 사이로 자름
+    return constrain(percentage, 0.0, 100.0);
   }
 
-  void calibrate() override {
-    // 필요 시 현재 수위를 0% 또는 100%로 설정하는 기능 구현 가능
-  }
-  
+  void calibrate() override {}
   void load_calibration() override {}
   void save_calibration() override {}
 };
 
 // ============================================================
-// TURBIDITY SENSOR CLASS
+// TURBIDITY SENSOR CLASS (Target: Gravity SEN0189)
 // ============================================================
 
 class TurbiditySensor : public Sensor {
 private:
-  float calib_clear_raw;  // Raw value for clear water (baseline)
+  float calib_clear_raw;  // Baseline voltage for clear water
 
 public:
-  TurbiditySensor(int _pin) : Sensor(_pin), calib_clear_raw(1023.0) {
+  TurbiditySensor(int _pin) : Sensor(_pin), calib_clear_raw(800.0) { // SEN0189 Clear water is usually ~4V (ADC ~818)
     sensor_id = 6;
     load_calibration();
   }
 
   float read() override {
     raw_value = 0.0;
-
     for (int i = 0; i < 5; i++) {
       raw_value += analogRead(pin);
-      delay(10);
+      delay(5);
     }
     raw_value /= 5.0;
 
@@ -428,25 +375,31 @@ public:
       return -1.0;
     }
 
-    // Conversion formula: NTU = (raw_value / calib_clear_raw) * max_turbidity
-    // Assuming sensor range 0-1000 NTU
-    float turbidity = ((calib_clear_raw - raw_value) / calib_clear_raw) * 1000.0;
+    // Simple inverted percentage for turbidity
+    // SEN0189: High Voltage = Clear, Low Voltage = Turbid
+    float turbidity = 0.0;
+    if (raw_value < calib_clear_raw) {
+        turbidity = ((calib_clear_raw - raw_value) / calib_clear_raw) * 1000.0;
+    }
 
     quality_flags = SENSOR_OK;
     return constrain(turbidity, 0.0, 1000.0);
   }
 
-  void calibrate() override {}
-
-  void load_calibration() override {
-    // Load clear water baseline - should be done during setup
-    // For now, use default (clear water = max voltage)
+  void calibrate() override {
+      // Set current reading as "Clear Water" baseline
+      float total = 0;
+      for(int i=0; i<10; i++) { total += analogRead(pin); delay(5); }
+      calib_clear_raw = total / 10.0;
+      save_calibration();
   }
 
-  void save_calibration() override {
-    // Save clear water baselineE
-   }
+  void load_calibration() override {
+     // For simplicity, using default or implemented EEPROM logic if needed
+     // Here using constructor default
+  }
 
+  void save_calibration() override {}
   void set_calib_clear(float raw) { calib_clear_raw = raw; }
 };
 

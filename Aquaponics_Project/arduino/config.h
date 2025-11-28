@@ -17,7 +17,7 @@
 #define EC_SENSOR_PIN           A1      // EC/TDS analog input
 #define DO_SENSOR_PIN           A2      // Dissolved Oxygen analog input
 #define TURBIDITY_SENSOR_PIN    A3      // Turbidity analog input
-#define WATER_LEVEL_PIN         A4      // KIT0139 Analog Sensor
+#define WATER_LEVEL_PIN         A4      // Water Level Analog Sensor (0-5V)
 
 // Digital Pins
 #define TEMPERATURE_PIN         4       // DS18B20 OneWire data pin
@@ -53,7 +53,7 @@
 // EC SENSOR CALIBRATION
 // ============================================================
 
-// [수정 후: SEN0451 표준 용액 기준]
+// [SEN0451 표준 용액 기준]
 #define EC_CALIB_LOW            1413    // 표준 버퍼 용액 1.413 mS/cm
 #define EC_CALIB_HIGH           12880   // 표준 버퍼 용액 12.88 mS/cm
 
