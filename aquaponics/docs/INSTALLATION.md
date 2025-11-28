@@ -72,12 +72,13 @@ pip install -r requirements.txt
 ### Step 4: Configure Application
 
 ```bash
-# Edit configuration
-cp ../config.json .
-nano config.json
+# Edit configuration (located in project root)
+nano ../config.json
 
-# Key settings to update:
-# - hardware.platform: "raspberry_pi"
+# Key settings to verify:
+# - hardware.platform: "arduino"
+# - water_level.sensor_type: "analog"
+# - web_server.host: "0.0.0.0" for remote access
 # - hardware.sensors: Enable/disable as needed
 # - web_server.host: "0.0.0.0" for remote access
 # - web_server.port: 5000 (or other port)
@@ -192,16 +193,22 @@ Install:
 ### Create Docker Image
 
 ```bash
+# Ensure you are in the project root
+cd ..
+
 # Build image
 docker build -t aquaponics:latest .
 
-# Run container
+# Run container (Method 1: Docker Compose - Recommended)
+docker-compose up -d
+
+# Run container (Method 2: Manual)
 docker run -d \
   --name aquaponics \
   -p 5000:5000 \
   -v ~/aquaponics/data:/app/data \
   -v ~/aquaponics/logs:/app/logs \
-  --device=/dev/i2c-1:/dev/i2c-1 \
+  -v ~/aquaponics/config.json:/app/config.json \
   --device=/dev/ttyUSB0:/dev/ttyUSB0 \
   aquaponics:latest
 ```
@@ -245,12 +252,11 @@ source ~/aquaponics-env/bin/activate
 pip install -r requirements.txt --force-reinstall
 ```
 
-### Issue: Permission Denied for GPIO/I2C
+### Issue: Permission Denied for Serial Port
 
 ```bash
-# Add user to required groups
-sudo usermod -a -G gpio pi
-sudo usermod -a -G i2c pi
+# Add user to dialout group (for USB/Serial access)
+sudo usermod -a -G dialout pi
 
 # Reboot for changes to take effect
 sudo reboot
@@ -327,6 +333,8 @@ tail -f logs/aquaponics.log
 # Pull latest changes
 cd ~/aquaponics
 git pull origin main
+
+# Note: If config.json has changes, check them against your local version
 
 # Update dependencies
 pip install -r raspberry_pi/requirements.txt --upgrade
