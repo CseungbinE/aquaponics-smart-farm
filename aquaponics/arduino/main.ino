@@ -205,7 +205,8 @@ void log_to_sd() {
 
   // Format and write CSV line
   char line[128];
-  snprintf(line, sizeof(line), "%lu,%5.2f,%6.1f,%5.2f,%4.2f,%3.0f,%5.1f,OK\n",
+// %5.1f : 수위를 소수점 1자리까지 저장 (예: 95.5)
+snprintf(line, sizeof(line), "%lu,%5.2f,%6.1f,%5.2f,%4.2f,%5.1f,%5.1f,OK\n",
            timestamp,
            get_average(ph_buffer),
            get_average(ec_buffer),
@@ -239,7 +240,7 @@ void send_serial_data() {
   Serial.print(F(",\"DO\":"));
   Serial.print(get_average(do_buffer), 2);
   Serial.print(F(",\"Level\":"));
-  Serial.print(get_average(level_buffer), 0);
+  Serial.print(get_average(level_buffer), 1); // 1: 소수점 1자리 출력
   Serial.print(F(",\"Turbidity\":"));
   Serial.print(get_average(turbidity_buffer), 1);
   Serial.println(F("}"));
