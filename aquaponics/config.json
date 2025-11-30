@@ -1,6 +1,7 @@
 {
   "hardware": {
     "platform": "arduino",
+    "enable_simulation": true,
     "notes": "Arduino Mega 2560/Uno connected via USB",
     "sensors": {
       "pH": {

@@ -99,3 +99,55 @@ class SerialSensorManager:
         except Exception as e:
             logger.error(f"Error sending command '{command}': {e}")
             return False
+
+# [추가] 시뮬레이션용 가짜 센서 매니저
+import random
+
+class MockSensorManager:
+    def __init__(self, config):
+        self.config = config
+        logger.info("==========================================")
+        logger.info(" RUNNING IN SIMULATION MODE (NO HARDWARE) ")
+        logger.info("==========================================")
+        
+        # 초기값 설정 (정상 범위 내)
+        self.current_data = {
+            "pH": 7.0,
+            "EC": 1400,
+            "Temp": 24.0,
+            "DO": 6.5,
+            "Level": 90.0,
+            "Turbidity": 10.0
+        }
+
+    def read_all(self):
+        # 1. 실제 통신 지연 시뮬레이션
+        time.sleep(0.1)
+        
+        # 2. 랜덤 워크 (Random Walk) 알고리즘으로 데이터가 서서히 변하도록 생성
+        # 급격하게 튀지 않고 조금씩 오르내리게 만듦
+        self.current_data["pH"] += random.uniform(-0.1, 0.1)
+        self.current_data["EC"] += random.uniform(-10, 10)
+        self.current_data["Temp"] += random.uniform(-0.2, 0.2)
+        self.current_data["DO"] += random.uniform(-0.1, 0.1)
+        self.current_data["Level"] += random.uniform(-0.5, 0.5)
+        self.current_data["Turbidity"] += random.uniform(-1, 1)
+
+        # 3. 값의 범위 제한 (현실적인 범위로 고정)
+        self.current_data["pH"] = round(max(0, min(14, self.current_data["pH"])), 2)
+        self.current_data["EC"] = round(max(0, self.current_data["EC"]), 0)
+        self.current_data["Temp"] = round(self.current_data["Temp"], 1)
+        self.current_data["DO"] = round(max(0, self.current_data["DO"]), 2)
+        self.current_data["Level"] = round(max(0, min(100, self.current_data["Level"])), 1)
+        self.current_data["Turbidity"] = round(max(0, self.current_data["Turbidity"]), 1)
+        
+        # 4. 타임스탬프 추가 (JSON 포맷 맞춤)
+        result = self.current_data.copy()
+        result['timestamp'] = int(time.time())
+        
+        return result
+
+    def send_command(self, command):
+        # 가짜로 명령 받았다고 로그만 출력
+        logger.info(f"[SIMULATION] Mock Arduino received command: {command}")
+        return True

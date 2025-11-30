@@ -30,7 +30,14 @@ logger = logging.getLogger(__name__)
 # Config 클래스가 절대 경로를 자동 계산하므로 인자 없이 호출
 config = Config() 
 db = DatabaseManager(config)
-sensors = SerialSensorManager(config)
+# [수정] 설정에 따라 시뮬레이션 모드인지 확인
+if config.get('hardware', {}).get('enable_simulation', False):
+    # sensors.py에 추가한 Mock 클래스 사용 (임포트 주의)
+    from app.sensors import MockSensorManager
+    sensors = MockSensorManager(config)
+else:
+    # 실제 하드웨어 연결
+    sensors = SerialSensorManager(config)
 alerts = AlertSystem(config, db)
 
 app = Flask(__name__)
