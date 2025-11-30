@@ -53,10 +53,18 @@ class SerialSensorManager:
 
         try:
             if self.serial.in_waiting > 0:
-                # readline()은 바이트열을 반환, decode()로 문자열 변환
-                # strip()으로 앞뒤 공백 및 개행문자 제거
-                line = self.serial.readline().decode('utf-8', errors='ignore').strip()
+                # [수정] 먼저 Raw 바이트 데이터를 읽어옵니다.
+                raw_line = self.serial.readline()
                 
+                try:
+                    # [수정] errors='strict'(기본값)를 사용하여 디코딩 시도
+                    # 데이터가 깨졌다면 즉시 UnicodeDecodeError 발생
+                    line = raw_line.decode('utf-8').strip()
+                except UnicodeDecodeError as ue:
+                    # [수정] 깨진 데이터는 로그에 남기고 이번 턴은 무시 (데이터 무결성 보장)
+                    logger.warning(f"Discarding corrupt serial data: {ue}. Raw hex: {raw_line.hex()}")
+                    return None
+
                 # 유효한 JSON 문자열인지 1차 검증
                 if line.startswith('{') and line.endswith('}'):
                     try:

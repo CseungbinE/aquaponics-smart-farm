@@ -4,14 +4,6 @@
  *
  * Board: Arduino Mega 2560
  * Sensors: pH, EC, Temperature, DO, Water Level, Turbidity
- *
- * Features:
- * - Multi-sensor data collection with averaging
- * - Calibration management (EEPROM storage)
- * - SD card data logging (CSV format)
- * - RTC timestamp synchronization
- * - Serial communication for Raspberry Pi
- * - Alert threshold monitoring
  */
 
 #include "config.h"
@@ -20,6 +12,7 @@
 #include <Wire.h>
 #include <SD.h>
 #include <time.h>
+#include <avr/wdt.h>  // [수정] Watchdog Timer 라이브러리 추가
 
 // ============================================================
 // GLOBAL OBJECTS
@@ -53,6 +46,10 @@ File data_file;
 // ============================================================
 
 void setup() {
+  // [수정] 안전장치: 부팅 직후 혹시 켜져 있을지 모를 워치독 비활성화
+  // (일부 부트로더에서 무한 리셋 루프 방지)
+  wdt_disable();
+
   // Serial communication
   Serial.begin(BAUD_RATE);
   delay(2000);  // Wait for serial to stabilize
@@ -101,9 +98,18 @@ void setup() {
 void loop() {
   unsigned long current_time = millis();
 
-  // Read sensors at configured interval
+  // [중요] 비동기 센서 업데이트 (Non-blocking)
+  // 매 루프마다 호출하여 백그라운드에서 데이터를 수집하게 합니다.
+  ph_sensor.update();
+  ec_sensor.update();
+  temp_sensor.update();
+  do_sensor.update();
+  water_level_sensor.update();
+  turbidity_sensor.update();
+
+  // Read sensors at configured interval (데이터 전송 주기)
   if (current_time - last_reading_time >= SENSOR_READ_INTERVAL) {
-    read_all_sensors();
+    read_all_sensors(); // 이제 이 함수는 0ms만에 실행됩니다.
     last_reading_time = current_time;
     buffer_index = (buffer_index + 1) % AVERAGING_WINDOW;
 
@@ -201,12 +207,12 @@ void log_to_sd() {
   }
 
   // Get current timestamp
-  unsigned long timestamp = millis() / 1000;  // Seconds since start
+  unsigned long timestamp = millis() / 1000; // Seconds since start
 
   // Format and write CSV line
   char line[128];
-// %5.1f : 수위를 소수점 1자리까지 저장 (예: 95.5)
-snprintf(line, sizeof(line), "%lu,%5.2f,%6.1f,%5.2f,%4.2f,%5.1f,%5.1f,OK\n",
+  // %5.1f : 수위를 소수점 1자리까지 저장 (예: 95.5)
+  snprintf(line, sizeof(line), "%lu,%5.2f,%6.1f,%5.2f,%4.2f,%5.1f,%5.1f,OK\n",
            timestamp,
            get_average(ph_buffer),
            get_average(ec_buffer),
@@ -214,7 +220,7 @@ snprintf(line, sizeof(line), "%lu,%5.2f,%6.1f,%5.2f,%4.2f,%5.1f,%5.1f,OK\n",
            get_average(do_buffer),
            get_average(level_buffer),
            get_average(turbidity_buffer));
-
+  
   data_file.print(line);
   data_file.close();
 
@@ -375,7 +381,6 @@ void init_buffers() {
 
 void load_thresholds() {
   // Load from EEPROM or use defaults
-  // For simplicity, using defaults for now
 }
 
 void print_header() {
@@ -417,5 +422,16 @@ void print_status() {
 }
 
 void software_reset() {
-  asm volatile("jmp 0");
+  // [수정] WDT를 사용한 하드웨어 리셋 구현
+  // 1. 사용자에게 리셋 사실 알림
+  Serial.println(F("SYSTEM RESET TRIGGERED by Software Command..."));
+  delay(100); // 전송 완료 대기
+
+  // 2. Watchdog Timer 활성화 (최소 시간인 15ms로 설정)
+  wdt_enable(WDTO_15MS);
+
+  // 3. 무한 루프로 진입하여 WDT 타임아웃 유발 (15ms 후 하드웨어 리셋 발생)
+  while (true) {
+    // 아무것도 하지 않음 -> 타임아웃 발생
+  }
 }
