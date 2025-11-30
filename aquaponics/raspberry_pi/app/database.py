@@ -49,6 +49,8 @@ class DatabaseManager:
         with self.lock:  # [수정] 쓰기 작업 락 적용 (백그라운드 스레드)
             conn = self.get_connection()
             c = conn.cursor()
+            
+            # 1. 데이터 삽입 (기존 로직)
             c.execute('''INSERT INTO sensor_readings 
                          (timestamp, pH, EC, temperature, DO, water_level, turbidity, status)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
@@ -56,6 +58,17 @@ class DatabaseManager:
                        data.get('pH'), data.get('EC'), data.get('Temp'),
                        data.get('DO'), data.get('Level'), data.get('Turbidity'),
                        "OK"))
+            
+            # 2. [추가] 오래된 데이터 자동 삭제 로직 (Auto-Cleanup)
+            # 매번 실행하면 느려지므로 1% 확률(약 100번 쓰기 중 1번)로만 실행
+            import random  # 함수 안에 넣어도 되고, 파일 맨 위에 두셔도 됩니다.
+            if random.randint(1, 100) == 1:
+                # 90일 지난 데이터 삭제 (config.json의 retention_days가 90일이므로)
+                c.execute("DELETE FROM sensor_readings WHERE timestamp < datetime('now', '-90 days')")
+                # 오래된 알림 기록도 같이 정리
+                c.execute("DELETE FROM alerts WHERE timestamp < datetime('now', '-90 days')")
+                print("Maintenance: Cleaned up old data (>90 days)")
+
             conn.commit()
             conn.close()
 
